@@ -32,11 +32,11 @@ By default, the plugin prefixes all routes with `/api/v1`:
 
 ```javascript
 import Hapi from '@hapi/hapi'
-import apiv from 'apiv'
+import Apiv from 'apiv'
 
 const server = Hapi.server({ port: 3000 })
 
-await server.register({ plugin: apiv })
+await server.register({ plugin: Apiv })
 
 server.route({
   method: 'GET',
@@ -54,7 +54,7 @@ You can customize both the version and prefix:
 
 ```javascript
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: {
     version: 'v2',
     prefix: 'service'
@@ -76,7 +76,7 @@ You can set either option to an empty string to exclude it:
 ```javascript
 // Only version, no prefix
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: {
     prefix: '',
     version: 'v1'
@@ -86,7 +86,7 @@ await server.register({
 
 // Only prefix, no version
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: {
     prefix: 'api',
     version: ''
@@ -96,7 +96,7 @@ await server.register({
 
 // Neither (routes unchanged)
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: {
     prefix: '',
     version: ''
@@ -111,7 +111,7 @@ You can disable the plugin entirely by setting `enabled: false`:
 
 ```javascript
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: { enabled: false }
 })
 
@@ -234,7 +234,7 @@ If you need to support multiple API versions, you can register separate server i
 ```javascript
 // All routes get v1 prefix
 await server.register({
-  plugin: apiv,
+  plugin: Apiv,
   options: { version: 'v1' }
 })
 
@@ -278,7 +278,7 @@ The plugin includes TypeScript definitions:
 
 ```typescript
 import { Server } from '@hapi/hapi'
-import apiv, { ApiVersionPluginOptions } from 'apiv'
+import Apiv, { ApiVersionPluginOptions } from 'apiv'
 
 const server: Server = Hapi.server({ port: 3000 })
 
@@ -288,7 +288,7 @@ const options: ApiVersionPluginOptions = {
   enabled: true
 }
 
-await server.register({ plugin: apiv, options })
+await server.register({ plugin: Apiv, options })
 ```
 
 ## License
