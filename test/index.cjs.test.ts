@@ -1,0 +1,323 @@
+import { describe, it, expect, beforeEach } from 'vitest'
+import { Server } from '@hapi/hapi'
+
+// Test CommonJS build
+const module = await import('../dist/cjs/index.js')
+const plugin = module.default || module
+
+describe('apiv (CommonJS)', () => {
+  let server: Server
+
+  beforeEach(async () => {
+    server = new Server()
+  })
+
+  describe('plugin registration', () => {
+    it('should register successfully with default options', async () => {
+      await expect(
+        server.register({
+          plugin,
+          options: {}
+        })
+      ).resolves.not.toThrow()
+    })
+
+    it('should register with custom version', async () => {
+      await expect(
+        server.register({
+          plugin,
+          options: { version: 'v2' }
+        })
+      ).resolves.not.toThrow()
+    })
+
+    it('should register with custom prefix', async () => {
+      await expect(
+        server.register({
+          plugin,
+          options: { prefix: 'service' }
+        })
+      ).resolves.not.toThrow()
+    })
+
+    it('should reject invalid option types', async () => {
+      await expect(
+        server.register({
+          plugin,
+          options: { version: 123 } as any
+        })
+      ).rejects.toThrow('Invalid plugin options')
+    })
+
+    it('should reject unknown options', async () => {
+      await expect(
+        server.register({
+          plugin,
+          options: { invalidOption: 'value' } as any
+        })
+      ).rejects.toThrow('Invalid plugin options')
+    })
+  })
+
+  describe('route versioning', () => {
+    it('should add default version and prefix to routes', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should add custom version and prefix to routes', async () => {
+      await server.register({
+        plugin,
+        options: { version: 'v2', prefix: 'service' }
+      })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/service/v2/users'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should handle routes with nested paths', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users/{id}/posts',
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users/123/posts'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+  })
+
+  describe('route-level overrides', () => {
+    it('should ignore route-specific version override (global prefix applies)', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: {
+          plugins: {
+            apiv: { version: 'v2' }
+          }
+        },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should ignore route-specific prefix override (global prefix applies)', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: {
+          plugins: {
+            apiv: { prefix: 'service' }
+          }
+        },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+  })
+
+  describe('plugin disabling', () => {
+    it('should not set global prefix when plugin is disabled', async () => {
+      await server.register({ plugin, options: { enabled: false } })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+    it('should not support per-route disabling with false (still prefixed)', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: {
+          plugins: {
+            apiv: false
+          }
+        },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should not support per-route disabling with enabled: false (still prefixed)', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: {
+          plugins: {
+            apiv: { enabled: false }
+          }
+        },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/health'
+      })
+
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ status: 'ok' })
+    })
+  })
+
+  describe('mixed routes', () => {
+    it('should version all routes when plugin is registered (no per-route disable)', async () => {
+      await server.register({ plugin })
+
+      server.route([
+        {
+          method: 'GET',
+          path: '/users',
+          handler: () => ({ versioned: true })
+        },
+        {
+          method: 'GET',
+          path: '/health',
+          options: {
+            plugins: {
+              apiv: false
+            }
+          },
+          handler: () => ({ health: 'ok' })
+        }
+      ])
+
+      await server.initialize()
+
+      const versionedRes = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+      expect(versionedRes.statusCode).toBe(200)
+      expect(versionedRes.result).toEqual({ versioned: true })
+
+      const healthRes = await server.inject({
+        method: 'GET',
+        url: '/api/v1/health'
+      })
+      expect(healthRes.statusCode).toBe(200)
+      expect(healthRes.result).toEqual({ health: 'ok' })
+    })
+
+    it('should ignore different version overrides and use global', async () => {
+      await server.register({ plugin })
+
+      server.route([
+        {
+          method: 'GET',
+          path: '/users',
+          handler: () => ({ version: 'default' })
+        },
+        {
+          method: 'GET',
+          path: '/posts',
+          options: {
+            plugins: {
+              apiv: { version: 'v2' }
+            }
+          },
+          handler: () => ({ version: 'v2' })
+        }
+      ])
+
+      await server.initialize()
+
+      const v1Res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/users'
+      })
+      expect(v1Res.statusCode).toBe(200)
+      expect(v1Res.result).toEqual({ version: 'default' })
+
+      const v2Res = await server.inject({
+        method: 'GET',
+        url: '/api/v1/posts'
+      })
+      expect(v2Res.statusCode).toBe(200)
+      expect(v2Res.result).toEqual({ version: 'v2' })
+    })
+  })
+})
