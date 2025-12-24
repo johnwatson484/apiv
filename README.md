@@ -1,3 +1,10 @@
+[![Quality Gate Status](https://sonarcloud.io/api/project_badges/measure?project=johnwatson484_apiv&metric=alert_status)](https://sonarcloud.io/summary/new_code?id=johnwatson484_apiv)
+[![Bugs](https://sonarcloud.io/api/project_badges/measure?project=johnwatson484_apiv&metric=bugs)](https://sonarcloud.io/summary/new_code?id=johnwatson484_apiv)
+[![Code Smells](https://sonarcloud.io/api/project_badges/measure?project=johnwatson484_apiv&metric=code_smells)](https://sonarcloud.io/summary/new_code?id=johnwatson484_apiv)
+[![Duplicated Lines (%)](https://sonarcloud.io/api/project_badges/measure?project=johnwatson484_apiv&metric=duplicated_lines_density)](https://sonarcloud.io/summary/new_code?id=johnwatson484_apiv)
+[![Coverage](https://sonarcloud.io/api/project_badges/measure?project=johnwatson484_apiv&metric=coverage)](https://sonarcloud.io/summary/new_code?id=johnwatson484_apiv)
+[![Known Vulnerabilities](https://snyk.io/test/github/johnwatson484/apiv/badge.svg)](https://snyk.io/test/github/johnwatson484/apiv)
+
 # Apiv
 
 A Hapi.js plugin that automatically adds version prefixes to all your API routes, making it easy to version your API endpoints.
@@ -130,9 +137,93 @@ All configuration is done at the plugin registration level:
 
 ### Important Notes
 
-- **No Per-Route Overrides**: This plugin applies globally to all routes. Route-level configuration via `options.plugins.apiv` is **not supported** and will be ignored.
-- **Global Configuration Only**: All routes registered after the plugin will receive the same prefix and version.
-- **Cannot Disable Per-Route**: Once the plugin is registered with `enabled: true` (the default), all routes will be prefixed. There is no way to exclude individual routes.
+- **Per-Route Overrides Supported (via aliases)**: Add `options.plugins.apiv` to a route to create an extra alias path with a different `prefix` and/or `version`. The global path still exists.
+- **Global Prefix Remains**: The plugin sets a global prefix for all routes; per-route overrides add aliases and do not replace the global path.
+- **Per-Route Disable (alias)**: Use `options.plugins.apiv: false` or `{ enabled: false }` to add an unprefixed alias for that route. The globally prefixed path remains unless the plugin is disabled globally.
+
+## Route-Level Overrides
+
+You can add route-specific overrides using `options.plugins.apiv`. These do not modify the original route registration; they create additional alias paths at server startup.
+
+### Version Override
+
+```javascript
+server.route({
+  method: 'GET',
+  path: '/users',
+  options: { plugins: { apiv: { version: 'v2' } } },
+  handler: () => ({ users: [] })
+})
+// Aliases:
+// - Global:   GET /api/v1/users
+// - Override: GET /api/v2/users
+```
+
+### Prefix Override
+
+```javascript
+server.route({
+  method: 'GET',
+  path: '/users',
+  options: { plugins: { apiv: { prefix: 'service' } } },
+  handler: () => ({ users: [] })
+})
+// Aliases:
+// - Global:   GET /api/v1/users
+// - Override: GET /service/v1/users
+```
+
+### Prefix + Version Override
+
+```javascript
+server.route({
+  method: 'GET',
+  path: '/users',
+  options: { plugins: { apiv: { prefix: 'service', version: 'v3' } } },
+  handler: () => ({ users: [] })
+})
+// Aliases:
+// - Global:   GET /api/v1/users
+// - Override: GET /service/v3/users
+```
+
+### Empty Version Override
+
+```javascript
+server.route({
+  method: 'GET',
+  path: '/users',
+  options: { plugins: { apiv: { version: '' } } },
+  handler: () => ({ users: [] })
+})
+// Aliases:
+// - Global:   GET /api/v1/users
+// - Override: GET /api/users
+```
+
+### Per-Route Disable
+
+```javascript
+// Disable via boolean
+server.route({
+  method: 'GET',
+  path: '/health',
+  options: { plugins: { apiv: false } },
+  handler: () => ({ status: 'ok' })
+})
+
+// Disable via object
+server.route({
+  method: 'GET',
+  path: '/status',
+  options: { plugins: { apiv: { enabled: false } } },
+  handler: () => ({ status: 'ok' })
+})
+
+// Aliases:
+// - Global:     GET /api/v1/health, /api/v1/status
+// - Unprefixed: GET /health, /status
+```
 
 ## Examples
 

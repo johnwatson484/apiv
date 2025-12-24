@@ -52,7 +52,71 @@ const plugin = {
     }
 
     const existing = realm.modifiers.route.prefix || ''
-    realm.modifiers.route.prefix = normalizedPrefix || existing
+    const globalPrefix = normalizedPrefix || existing
+    realm.modifiers.route.prefix = globalPrefix
+
+    // Add alias routes for per-route overrides using options.plugins.apiv
+    server.ext('onPreStart', () => {
+      const routes = server.table()
+
+      const stripGlobal = (p: string) => {
+        if (!globalPrefix) return p
+        if (p.startsWith(globalPrefix)) {
+          const trimmed = p.slice(globalPrefix.length)
+          return trimmed.length ? trimmed : '/'
+        }
+        return p
+      }
+
+      const buildVersionedPath = (originalPath: string, prefix?: string, version?: string) => {
+        const segments: string[] = []
+        if (prefix) {
+          segments.push(prefix)
+        }
+        if (version) {
+          segments.push(version)
+        }
+
+        const cleanPath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
+        if (cleanPath) {
+          segments.push(cleanPath)
+        }
+
+        return '/' + segments.join('/').replaceAll(/\/+/g, '/')
+      }
+
+      for (const r of routes) {
+        const routePlugins = (r.settings && (r.settings as any).plugins) || {}
+        const apivConfig = (routePlugins as any).apiv
+
+        // Skip if no per-route config
+        if (apivConfig === undefined) {
+          continue
+        }
+
+        const originalPath = stripGlobal(r.path)
+
+        // Disabled: create unprefixed alias
+        if (apivConfig === false || apivConfig?.enabled === false) {
+          server.route({ method: r.method, path: originalPath, handler: (r.settings as any).handler })
+          continue
+        }
+
+        // Overrides: compute per-route prefix/version with fallbacks to global
+        const hasPrefix = apivConfig && Object.hasOwn(apivConfig, 'prefix')
+        const hasVersion = apivConfig && Object.hasOwn(apivConfig, 'version')
+
+        const overridePrefix = hasPrefix ? apivConfig.prefix : mergedOptions.prefix
+        const overrideVersion = hasVersion ? apivConfig.version : mergedOptions.version
+
+        const aliasPath = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
+
+        // Avoid duplicating the existing global path
+        if (aliasPath !== r.path) {
+          server.route({ method: r.method, path: aliasPath, handler: (r.settings as any).handler })
+        }
+      }
+    })
   }
 }
 

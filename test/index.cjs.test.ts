@@ -174,6 +174,125 @@ describe('apiv (CommonJS)', () => {
       expect(res.statusCode).toBe(200)
       expect(res.result).toEqual({ success: true })
     })
+
+    it('should expose alias path for version override on root path', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ root: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ root: true })
+    })
+
+    it('should expose alias path for prefix override on root path', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/',
+        options: { plugins: { apiv: { prefix: 'service' } } },
+        handler: () => ({ root: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/service/v1' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ root: true })
+    })
+
+    it('should expose alias when global prefix/version are empty (version override)', async () => {
+      await server.register({ plugin, options: { prefix: '', version: '' } })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/v2/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should expose alias when global prefix/version are empty (prefix override)', async () => {
+      await server.register({ plugin, options: { prefix: '', version: '' } })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { prefix: 'service' } } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/service/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should expose alias for a route registered before plugin', async () => {
+      // Route added before plugin registration
+      server.route({
+        method: 'GET',
+        path: '/pre',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ pre: true })
+      })
+
+      await server.register({ plugin })
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2/pre' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ pre: true })
+    })
+
+    it('should expose alias path for route-specific version override', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
+    it('should expose alias path for route-specific prefix override', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { prefix: 'service' } } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/service/v1/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
   })
 
   describe('plugin disabling', () => {
@@ -217,6 +336,23 @@ describe('apiv (CommonJS)', () => {
       expect(res.result).toEqual({ success: true })
     })
 
+    it('should expose unprefixed alias when per-route disabled with false', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: false } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
+    })
+
     it('should not support per-route disabling with enabled: false (still prefixed)', async () => {
       await server.register({ plugin })
 
@@ -240,6 +376,40 @@ describe('apiv (CommonJS)', () => {
 
       expect(res.statusCode).toBe(200)
       expect(res.result).toEqual({ status: 'ok' })
+    })
+
+    it('should expose unprefixed alias when per-route disabled with enabled: false', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: { plugins: { apiv: { enabled: false } } },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/health' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ status: 'ok' })
+    })
+
+    it('should expose unprefixed alias on root path when per-route disabled', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/',
+        options: { plugins: { apiv: false } },
+        handler: () => ({ root: true })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ root: true })
     })
   })
 
@@ -318,6 +488,46 @@ describe('apiv (CommonJS)', () => {
       })
       expect(v2Res.statusCode).toBe(200)
       expect(v2Res.result).toEqual({ version: 'v2' })
+    })
+
+    it('should expose alias for routes with different version overrides', async () => {
+      await server.register({ plugin })
+
+      server.route([
+        { method: 'GET', path: '/users', handler: () => ({ version: 'default' }) },
+        {
+          method: 'GET',
+          path: '/posts',
+          options: { plugins: { apiv: { version: 'v2' } } },
+          handler: () => ({ version: 'v2' })
+        }
+      ])
+
+      await server.initialize()
+
+      const v2Res = await server.inject({ method: 'GET', url: '/api/v2/posts' })
+      expect(v2Res.statusCode).toBe(200)
+      expect(v2Res.result).toEqual({ version: 'v2' })
+    })
+
+    it('should not duplicate alias when override equals global', async () => {
+      await server.register({ plugin, options: { prefix: 'api', version: 'v1' } })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { prefix: 'api', version: 'v1' } } },
+        handler: () => ({ success: true })
+      })
+
+      await server.initialize()
+
+      const table = server.table().filter(r => r.method === 'get' && r.path === '/api/v1/users')
+      expect(table.length).toBe(1)
+
+      const res = await server.inject({ method: 'GET', url: '/api/v1/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ success: true })
     })
   })
 })
