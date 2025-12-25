@@ -1,4 +1,4 @@
-import { Server } from '@hapi/hapi'
+import { Server, type ReqRefDefaults, type RequestRoute } from '@hapi/hapi'
 import { applyToDefaults } from '@hapi/hoek'
 import Joi from 'joi'
 
@@ -28,7 +28,7 @@ const plugin = {
       throw new Error(`Invalid plugin options: ${error.message}`)
     }
 
-    const mergedOptions = applyToDefaults(defaultOptions, value)
+    const mergedOptions: ApiVersionPluginOptions = applyToDefaults(defaultOptions, value)
 
     if (mergedOptions.enabled === false) {
       return
@@ -44,43 +44,45 @@ const plugin = {
       parts.push(mergedOptions.version)
     }
 
-    const normalizedPrefix = parts.length ? '/' + parts.join('/') : ''
+    const normalizedPrefix: string = parts.length ? '/' + parts.join('/') : ''
 
     let realm = server.realm as any
     while (realm.parent) {
       realm = realm.parent
     }
 
-    const existing = realm.modifiers.route.prefix || ''
-    const globalPrefix = normalizedPrefix || existing
+    const existing: string = realm.modifiers.route.prefix || ''
+    const globalPrefix: string = normalizedPrefix || existing
     realm.modifiers.route.prefix = globalPrefix
 
-    // Add alias routes for per-route overrides using options.plugins.apiv
     server.ext('onPreStart', () => {
-      const routes = server.table()
+      const routes: RequestRoute<ReqRefDefaults>[] = server.table()
 
-      const stripGlobal = (path: string) => {
+      const stripGlobal = (path: string): string => {
         if (!globalPrefix) {
           return path
         }
 
         if (path.startsWith(globalPrefix)) {
-          const trimmed = path.slice(globalPrefix.length)
+          const trimmed: string = path.slice(globalPrefix.length)
           return trimmed.length ? trimmed : '/'
         }
         return path
       }
 
-      const buildVersionedPath = (originalPath: string, prefix?: string, version?: string) => {
+      const buildVersionedPath = (originalPath: string, prefix?: string, version?: string): string => {
         const segments: string[] = []
+
         if (prefix) {
           segments.push(prefix)
         }
+
         if (version) {
           segments.push(version)
         }
 
-        const cleanPath = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
+        const cleanPath: string = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
+
         if (cleanPath) {
           segments.push(cleanPath)
         }
@@ -92,26 +94,24 @@ const plugin = {
         const routePlugins = (route.settings && (route.settings as any).plugins) || {}
         const apivConfig = routePlugins.apiv
 
-        // Skip if no per-route config
         if (apivConfig === undefined) {
           continue
         }
 
-        const originalPath = stripGlobal(route.path)
+        const originalPath: string = stripGlobal(route.path)
 
-        // Disabled: create unprefixed alias
         if (apivConfig === false || apivConfig?.enabled === false) {
           server.route({ method: route.method, path: originalPath, handler: (route.settings as any).handler })
           continue
         }
 
-        const hasPrefix = apivConfig && Object.hasOwn(apivConfig, 'prefix')
-        const hasVersion = apivConfig && Object.hasOwn(apivConfig, 'version')
+        const hasPrefix: boolean = apivConfig && Object.hasOwn(apivConfig, 'prefix')
+        const hasVersion: boolean = apivConfig && Object.hasOwn(apivConfig, 'version')
 
-        const overridePrefix = hasPrefix ? apivConfig.prefix : mergedOptions.prefix
-        const overrideVersion = hasVersion ? apivConfig.version : mergedOptions.version
+        const overridePrefix: string = hasPrefix ? apivConfig.prefix : mergedOptions.prefix
+        const overrideVersion: string = hasVersion ? apivConfig.version : mergedOptions.version
 
-        const aliasPath = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
+        const aliasPath: string = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
 
         if (aliasPath !== route.path) {
           server.route({ method: route.method, path: aliasPath, handler: (route.settings as any).handler })

@@ -12,6 +12,7 @@
   },
   "scripts": {
     "lint": "eslint",
+    "lint:fix": "eslint --fix",
     "build": "tsc && tsc -p tsconfig.cjs.json && echo '{\"type\":\"commonjs\"}' > dist/cjs/package.json && sed -i 's/exports.default = plugin;/module.exports = plugin;/' dist/cjs/index.js",
     "test": "npm run build && vitest run --coverage",
     "test:watch": "vitest"
