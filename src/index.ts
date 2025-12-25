@@ -59,13 +59,16 @@ const plugin = {
     server.ext('onPreStart', () => {
       const routes = server.table()
 
-      const stripGlobal = (p: string) => {
-        if (!globalPrefix) return p
-        if (p.startsWith(globalPrefix)) {
-          const trimmed = p.slice(globalPrefix.length)
+      const stripGlobal = (path: string) => {
+        if (!globalPrefix) {
+          return path
+        }
+
+        if (path.startsWith(globalPrefix)) {
+          const trimmed = path.slice(globalPrefix.length)
           return trimmed.length ? trimmed : '/'
         }
-        return p
+        return path
       }
 
       const buildVersionedPath = (originalPath: string, prefix?: string, version?: string) => {
@@ -85,24 +88,23 @@ const plugin = {
         return '/' + segments.join('/').replaceAll(/\/+/g, '/')
       }
 
-      for (const r of routes) {
-        const routePlugins = (r.settings && (r.settings as any).plugins) || {}
-        const apivConfig = (routePlugins as any).apiv
+      for (const route of routes) {
+        const routePlugins = (route.settings && (route.settings as any).plugins) || {}
+        const apivConfig = routePlugins.apiv
 
         // Skip if no per-route config
         if (apivConfig === undefined) {
           continue
         }
 
-        const originalPath = stripGlobal(r.path)
+        const originalPath = stripGlobal(route.path)
 
         // Disabled: create unprefixed alias
         if (apivConfig === false || apivConfig?.enabled === false) {
-          server.route({ method: r.method, path: originalPath, handler: (r.settings as any).handler })
+          server.route({ method: route.method, path: originalPath, handler: (route.settings as any).handler })
           continue
         }
 
-        // Overrides: compute per-route prefix/version with fallbacks to global
         const hasPrefix = apivConfig && Object.hasOwn(apivConfig, 'prefix')
         const hasVersion = apivConfig && Object.hasOwn(apivConfig, 'version')
 
@@ -111,9 +113,8 @@ const plugin = {
 
         const aliasPath = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
 
-        // Avoid duplicating the existing global path
-        if (aliasPath !== r.path) {
-          server.route({ method: r.method, path: aliasPath, handler: (r.settings as any).handler })
+        if (aliasPath !== route.path) {
+          server.route({ method: route.method, path: aliasPath, handler: (route.settings as any).handler })
         }
       }
     })
