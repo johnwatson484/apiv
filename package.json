@@ -1,6 +1,6 @@
 {
   "name": "apiv",
-  "version": "1.0.3",
+  "version": "1.0.4",
   "description": "A Hapi.js plugin that automatically adds version prefixes to all your API routes, making it easy to version your API endpoints.",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

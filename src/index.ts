@@ -1,4 +1,4 @@
-import { Server, type ReqRefDefaults, type RequestRoute } from '@hapi/hapi'
+import { Server, type Plugin, type ReqRefDefaults, type RequestRoute } from '@hapi/hapi'
 import { applyToDefaults } from '@hapi/hoek'
 import Joi from 'joi'
 
@@ -19,7 +19,7 @@ const optionsSchema = Joi.object({
   enabled: Joi.boolean().optional()
 }).unknown(false)
 
-const plugin = {
+const plugin: Plugin<ApiVersionPluginOptions> = {
   name: 'apiv',
   register: async function (server: Server, options: ApiVersionPluginOptions = {}) {
     const { error, value } = optionsSchema.validate(options)
