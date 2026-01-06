@@ -225,6 +225,70 @@ server.route({
 // - Unprefixed: GET /health, /status
 ```
 
+## Route Options Preservation
+
+**Important**: Alias routes created by per-route overrides or disabling only copy the route's handler function. **Route configuration options are NOT preserved** on the alias routes.
+
+This means that settings like:
+- `auth` - authentication requirements
+- `validate` - request validation schemas
+- `description`, `notes`, `tags` - documentation metadata
+- `cors` - CORS settings
+- `payload` - payload parsing options
+- `timeout` - timeout settings
+- Other route-level configurations
+
+...will **only apply to the original prefixed route**, not to any aliases.
+
+### Example
+
+```javascript
+server.route({
+  method: 'GET',
+  path: '/secure',
+  options: {
+    auth: 'jwt',  // Only applies to /api/v1/secure
+    validate: {
+      query: Joi.object({
+        id: Joi.string().required()
+      })
+    },
+    plugins: { apiv: false }  // Creates alias at /secure
+  },
+  handler: () => ({ data: 'sensitive' })
+})
+
+// Result:
+// - GET /api/v1/secure - Has auth and validation
+// - GET /secure        - No auth, no validation (just the handler)
+```
+
+**If you need authentication, validation, or other options on multiple paths**, you should explicitly define separate routes instead of relying on aliases:
+
+```javascript
+// Better approach for routes requiring auth/validation
+const routeConfig = {
+  auth: 'jwt',
+  validate: {
+    query: Joi.object({ id: Joi.string().required() })
+  }
+}
+
+server.route({
+  method: 'GET',
+  path: '/api/v1/secure',
+  options: routeConfig,
+  handler: secureHandler
+})
+
+server.route({
+  method: 'GET',
+  path: '/secure',
+  options: routeConfig,
+  handler: secureHandler
+})
+```
+
 ## Examples
 
 ### Multiple Versions on Same Server
