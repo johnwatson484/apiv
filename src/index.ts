@@ -55,72 +55,8 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
     const globalPrefix: string = normalizedPrefix || existing
     realm.modifiers.route.prefix = globalPrefix
 
-    const extractRouteOptions = (settings: any) => {
-      const options: any = {}
-
-      const propsToCopy = [
-        'auth', 'bind', 'description', 'id', 'isInternal', 'notes', 'tags'
-      ]
-
-      for (const prop of propsToCopy) {
-        if (settings[prop] !== undefined && settings[prop] !== null) {
-          options[prop] = settings[prop]
-        }
-      }
-
-      if (settings.cors && settings.cors !== false) {
-        options.cors = settings.cors
-      }
-
-      if (settings.compression && Object.keys(settings.compression).length > 0) {
-        options.compression = settings.compression
-      }
-
-      if (settings.jsonp && settings.jsonp !== null) {
-        options.jsonp = settings.jsonp
-      }
-
-      if (settings.payload && settings.payload !== null) {
-        options.payload = settings.payload
-      }
-
-      if (settings.response && settings.response.schema !== undefined) {
-        options.response = settings.response
-      }
-
-      if (settings.security && settings.security !== null) {
-        options.security = settings.security
-      }
-
-      if (settings.timeout && (settings.timeout.server !== false || settings.timeout.socket !== undefined)) {
-        options.timeout = settings.timeout
-      }
-
-      if (settings.validate) {
-        const hasValidators = settings.validate.payload || settings.validate.params ||
-          settings.validate.query || settings.validate.headers || settings.validate.state
-        if (hasValidators) {
-          options.validate = settings.validate
-        }
-      }
-
-      return options
-    }
-
     server.ext('onPreStart', () => {
       const routes: RequestRoute<ReqRefDefaults>[] = server.table()
-
-      const stripGlobal = (path: string): string => {
-        if (!globalPrefix) {
-          return path
-        }
-
-        if (path.startsWith(globalPrefix)) {
-          const trimmed: string = path.slice(globalPrefix.length)
-          return trimmed.length ? trimmed : '/'
-        }
-        return path
-      }
 
       const buildVersionedPath = (originalPath: string, prefix?: string, version?: string): string => {
         const segments: string[] = []
@@ -142,6 +78,18 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         return '/' + segments.join('/').replaceAll(/\/+/g, '/')
       }
 
+      const stripGlobal = (path: string): string => {
+        if (!globalPrefix) {
+          return path
+        }
+
+        if (path.startsWith(globalPrefix)) {
+          const trimmed: string = path.slice(globalPrefix.length)
+          return trimmed.length ? trimmed : '/'
+        }
+        return path
+      }
+
       for (const route of routes) {
         const routePlugins = (route.settings && (route.settings as any).plugins) || {}
         const apivConfig = routePlugins.apiv
@@ -153,8 +101,11 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         const originalPath: string = stripGlobal(route.path)
 
         if (apivConfig === false || apivConfig?.enabled === false) {
-          const routeOptions = extractRouteOptions(route.settings)
-          server.route({ method: route.method, path: originalPath, handler: route.settings.handler, options: routeOptions })
+          server.route({
+            method: route.method,
+            path: originalPath,
+            handler: route.settings.handler
+          })
           continue
         }
 
@@ -167,8 +118,11 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         const aliasPath: string = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
 
         if (aliasPath !== route.path) {
-          const routeOptions = extractRouteOptions(route.settings)
-          server.route({ method: route.method, path: aliasPath, handler: route.settings.handler, options: routeOptions })
+          server.route({
+            method: route.method,
+            path: aliasPath,
+            handler: route.settings.handler
+          })
         }
       }
     })
