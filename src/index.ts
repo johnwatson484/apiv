@@ -55,6 +55,60 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
     const globalPrefix: string = normalizedPrefix || existing
     realm.modifiers.route.prefix = globalPrefix
 
+    const extractRouteOptions = (settings: any) => {
+      const options: any = {
+        handler: settings.handler
+      }
+
+      const propsToCopy = [
+        'auth', 'bind', 'description', 'id', 'isInternal', 'notes', 'tags'
+      ]
+
+      for (const prop of propsToCopy) {
+        if (settings[prop] !== undefined && settings[prop] !== null) {
+          options[prop] = settings[prop]
+        }
+      }
+
+      if (settings.cors && settings.cors !== false) {
+        options.cors = settings.cors
+      }
+
+      if (settings.compression && Object.keys(settings.compression).length > 0) {
+        options.compression = settings.compression
+      }
+
+      if (settings.jsonp && settings.jsonp !== null) {
+        options.jsonp = settings.jsonp
+      }
+
+      if (settings.payload && settings.payload !== null) {
+        options.payload = settings.payload
+      }
+
+      if (settings.response && settings.response.schema !== undefined) {
+        options.response = settings.response
+      }
+
+      if (settings.security && settings.security !== null) {
+        options.security = settings.security
+      }
+
+      if (settings.timeout && (settings.timeout.server !== false || settings.timeout.socket !== undefined)) {
+        options.timeout = settings.timeout
+      }
+
+      if (settings.validate) {
+        const hasValidators = settings.validate.payload || settings.validate.params ||
+          settings.validate.query || settings.validate.headers || settings.validate.state
+        if (hasValidators) {
+          options.validate = settings.validate
+        }
+      }
+
+      return options
+    }
+
     server.ext('onPreStart', () => {
       const routes: RequestRoute<ReqRefDefaults>[] = server.table()
 
@@ -101,7 +155,8 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         const originalPath: string = stripGlobal(route.path)
 
         if (apivConfig === false || apivConfig?.enabled === false) {
-          server.route({ method: route.method, path: originalPath, handler: (route.settings as any).handler })
+          const routeOptions = extractRouteOptions(route.settings)
+          server.route({ ...routeOptions, method: route.method, path: originalPath })
           continue
         }
 
@@ -114,7 +169,8 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         const aliasPath: string = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
 
         if (aliasPath !== route.path) {
-          server.route({ method: route.method, path: aliasPath, handler: (route.settings as any).handler })
+          const routeOptions = extractRouteOptions(route.settings)
+          server.route({ ...routeOptions, method: route.method, path: aliasPath })
         }
       }
     })

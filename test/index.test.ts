@@ -764,4 +764,48 @@ describe('apiv', () => {
       expect(v2Res.result).toEqual({ version: 'v2' })
     })
   })
+
+  describe('route settings preservation', () => {
+    it('should preserve handler when apiv: false creates alias', async () => {
+      await server.register({ plugin })
+
+      const customHandler = () => ({ custom: 'handler' })
+
+      server.route({
+        method: 'GET',
+        path: '/handler-test',
+        options: {
+          plugins: { apiv: false }
+        },
+        handler: customHandler
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/handler-test' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ custom: 'handler' })
+    })
+
+    it('should preserve handler when version override creates alias', async () => {
+      await server.register({ plugin })
+
+      const customHandler = () => ({ versioned: 'data' })
+
+      server.route({
+        method: 'GET',
+        path: '/handler-test',
+        options: {
+          plugins: { apiv: { version: 'v2' } }
+        },
+        handler: customHandler
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2/handler-test' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ versioned: 'data' })
+    })
+  })
 })
