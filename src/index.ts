@@ -56,9 +56,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
     realm.modifiers.route.prefix = globalPrefix
 
     const extractRouteOptions = (settings: any) => {
-      const options: any = {
-        handler: settings.handler
-      }
+      const options: any = {}
 
       const propsToCopy = [
         'auth', 'bind', 'description', 'id', 'isInternal', 'notes', 'tags'
@@ -156,7 +154,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
 
         if (apivConfig === false || apivConfig?.enabled === false) {
           const routeOptions = extractRouteOptions(route.settings)
-          server.route({ ...routeOptions, method: route.method, path: originalPath })
+          server.route({ method: route.method, path: originalPath, handler: route.settings.handler, options: routeOptions })
           continue
         }
 
@@ -170,7 +168,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
 
         if (aliasPath !== route.path) {
           const routeOptions = extractRouteOptions(route.settings)
-          server.route({ ...routeOptions, method: route.method, path: aliasPath })
+          server.route({ method: route.method, path: aliasPath, handler: route.settings.handler, options: routeOptions })
         }
       }
     })
