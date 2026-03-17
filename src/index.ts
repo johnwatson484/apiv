@@ -126,11 +126,13 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         const originalPath: string = stripGlobal(route.path)
 
         if (apivConfig === false || apivConfig?.enabled === false) {
-          server.route({
-            method: route.method,
-            path: originalPath,
-            options: buildAliasOptions(route)
-          })
+          if (originalPath !== route.path) {
+            server.route({
+              method: route.method,
+              path: originalPath,
+              options: buildAliasOptions(route)
+            })
+          }
           continue
         }
 

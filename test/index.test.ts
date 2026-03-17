@@ -1121,4 +1121,70 @@ describe('apiv', () => {
       expect(res.result).toEqual({ users: [] })
     })
   })
+
+  describe('routes registered by nested plugin', () => {
+    const makeRouterPlugin = (routes: any[]) => ({
+      plugin: {
+        name: 'router',
+        register: (srv: Server) => { srv.route(routes) }
+      }
+    })
+
+    it('should not conflict when apiv: false route is registered by nested plugin in same register call', async () => {
+      const router = makeRouterPlugin([{
+        method: 'GET',
+        path: '/health',
+        options: { auth: false, plugins: { apiv: false } },
+        handler: () => ({ status: 'ok' })
+      }])
+
+      await expect(server.register([{ plugin }, router])).resolves.not.toThrow()
+      await expect(server.initialize()).resolves.not.toThrow()
+    })
+
+    it('should not conflict when enabled: false route is registered by nested plugin in same register call', async () => {
+      const router = makeRouterPlugin([{
+        method: 'GET',
+        path: '/health',
+        options: { plugins: { apiv: { enabled: false } } },
+        handler: () => ({ status: 'ok' })
+      }])
+
+      await expect(server.register([{ plugin }, router])).resolves.not.toThrow()
+      await expect(server.initialize()).resolves.not.toThrow()
+    })
+
+    it('should still serve the route at its plain path when registered via nested plugin with apiv: false', async () => {
+      const router = makeRouterPlugin([{
+        method: 'GET',
+        path: '/health',
+        options: { auth: false, plugins: { apiv: false } },
+        handler: () => ({ status: 'ok' })
+      }])
+
+      await server.register([{ plugin }, router])
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/health' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ status: 'ok' })
+    })
+
+    it('should register version override alias from nested plugin without conflict', async () => {
+      const router = makeRouterPlugin([{
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ users: [] })
+      }])
+
+      await server.register([{ plugin }, router])
+      await server.initialize()
+
+      // Route is at /users (nested plugin doesn't inherit root realm prefix).
+      // Version override builds alias using the global prefix + override version.
+      const res = await server.inject({ method: 'GET', url: '/api/v2/users' })
+      expect(res.statusCode).toBe(200)
+    })
+  })
 })

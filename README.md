@@ -141,6 +141,37 @@ All configuration is done at the plugin registration level:
 - **Global Prefix Remains**: The plugin sets a global prefix for all routes; per-route overrides add aliases and do not replace the global path.
 - **Per-Route Disable (alias)**: Use `options.plugins.apiv: false` or `{ enabled: false }` to add an unprefixed alias for that route. The globally prefixed path remains unless the plugin is disabled globally.
 - **Route Settings Fully Preserved**: Alias routes copy all route configuration from the original route — including `auth`, `validate`, `cors`, `payload`, `pre`, `tags`, and all other options. The alias route id is not copied to avoid conflicts.
+- **Registration Order Matters**: Apiv must be registered in a separate `await server.register()` call that completes **before** any plugin that registers routes. See [Registration Order](#registration-order) below.
+
+## Registration Order
+
+Apiv works by setting a prefix on the root Hapi realm at registration time. Hapi propagates realm prefixes to child plugins at the **start** of each `server.register()` call, before any plugin in that call has run. This means that if Apiv and your route plugins are passed to the same `server.register()` call, the route plugins will not inherit the prefix — and routes will not be versioned.
+
+### Correct: separate register calls
+
+```javascript
+// Apiv runs first and sets the realm prefix
+await server.register({ plugin: Apiv })
+
+// Route plugins now inherit the prefix correctly
+await server.register([
+  routerPlugin,
+  otherPlugin
+])
+// Routes are accessible at: GET /api/v1/users, etc.
+```
+
+### Incorrect: same register call
+
+```javascript
+// Apiv and the router are in the same call — routes will NOT be versioned
+await server.register([
+  { plugin: Apiv },
+  routerPlugin       // ← routes registered here won't get the prefix
+])
+```
+
+If Apiv and route plugins must share a single `server.register()` call for some reason, routes will remain at their plain paths (e.g. `/health` instead of `/api/v1/health`). Any `options.plugins.apiv` overrides on those routes are silently skipped — no conflict or error is thrown.
 
 ## Route-Level Overrides
 
