@@ -1038,4 +1038,87 @@ describe('apiv', () => {
       expect(res.statusCode).toBe(200)
     })
   })
+
+  describe('server-level route defaults', () => {
+    const createServerWithSecurityDefaults = () => new Server({
+      routes: {
+        security: {
+          hsts: { maxAge: 31536000, includeSubDomains: true, preload: false },
+          xss: 'enabled',
+          noSniff: true,
+          xframe: true
+        }
+      }
+    })
+
+    it('should start without error when server has security defaults and route uses apiv: false', async () => {
+      server = createServerWithSecurityDefaults()
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: {
+          auth: false,
+          plugins: { apiv: false }
+        },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await expect(server.initialize()).resolves.not.toThrow()
+    })
+
+    it('should serve the unprefixed alias when server has security defaults', async () => {
+      server = createServerWithSecurityDefaults()
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: {
+          auth: false,
+          plugins: { apiv: false }
+        },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/health' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ status: 'ok' })
+    })
+
+    it('should start without error when server has security defaults and route uses version override', async () => {
+      server = createServerWithSecurityDefaults()
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ users: [] })
+      })
+
+      await expect(server.initialize()).resolves.not.toThrow()
+    })
+
+    it('should serve the version override alias when server has security defaults', async () => {
+      server = createServerWithSecurityDefaults()
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ users: [] })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2/users' })
+      expect(res.statusCode).toBe(200)
+      expect(res.result).toEqual({ users: [] })
+    })
+  })
 })

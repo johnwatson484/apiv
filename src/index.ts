@@ -93,8 +93,24 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
       const buildAliasOptions = (route: RequestRoute<ReqRefDefaults>): Record<string, unknown> => {
         const { plugins: existingPlugins, id: _id, ...restSettings } = route.settings as any
         const { apiv: _apiv, ...restPlugins } = existingPlugins || {}
+
+        // Hapi mutates certain nested config objects during normalisation, adding computed
+        // fields prefixed with _ (e.g. security._hsts, security._xframe). These are internal
+        // cache strings derived from the public options and are rejected by Hapi's route
+        // validator if passed back as route options. Strip them so Hapi re-derives them cleanly.
+        const sanitised: Record<string, unknown> = {}
+        for (const [key, value] of Object.entries(restSettings)) {
+          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+            sanitised[key] = Object.fromEntries(
+              Object.entries(value as object).filter(([k]) => !k.startsWith('_'))
+            )
+          } else {
+            sanitised[key] = value
+          }
+        }
+
         return {
-          ...restSettings,
+          ...sanitised,
           ...(Object.keys(restPlugins).length > 0 ? { plugins: restPlugins } : {})
         }
       }
