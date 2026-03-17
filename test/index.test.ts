@@ -943,4 +943,99 @@ describe('apiv', () => {
       expect((alias?.settings as any).description).toBe('Get users')
     })
   })
+
+  describe('default auth strategy', () => {
+    const setupDefaultAuth = (srv: Server) => {
+      srv.auth.scheme('simple-token', () => ({
+        authenticate: (request: any, h: any) => {
+          if (request.headers['x-token'] === 'secret') {
+            return h.authenticated({ credentials: { user: 'test' } })
+          }
+          return h.unauthenticated(Boom.unauthorized('Invalid token'))
+        }
+      }))
+      srv.auth.strategy('token', 'simple-token')
+      srv.auth.default('token')
+    }
+
+    it('should enforce default auth on unprefixed alias (apiv: false)', async () => {
+      setupDefaultAuth(server)
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: { plugins: { apiv: false } },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const unauth = await server.inject({ method: 'GET', url: '/health' })
+      expect(unauth.statusCode).toBe(401)
+
+      const authed = await server.inject({ method: 'GET', url: '/health', headers: { 'x-token': 'secret' } })
+      expect(authed.statusCode).toBe(200)
+    })
+
+    it('should enforce default auth on version override alias', async () => {
+      setupDefaultAuth(server)
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/users',
+        options: { plugins: { apiv: { version: 'v2' } } },
+        handler: () => ({ users: [] })
+      })
+
+      await server.initialize()
+
+      const unauth = await server.inject({ method: 'GET', url: '/api/v2/users' })
+      expect(unauth.statusCode).toBe(401)
+
+      const authed = await server.inject({ method: 'GET', url: '/api/v2/users', headers: { 'x-token': 'secret' } })
+      expect(authed.statusCode).toBe(200)
+    })
+
+    it('should allow explicit auth: false to make unprefixed alias public despite default auth', async () => {
+      setupDefaultAuth(server)
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: {
+          auth: false,
+          plugins: { apiv: false }
+        },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/health' })
+      expect(res.statusCode).toBe(200)
+    })
+
+    it('should allow explicit auth: false to make version override alias public despite default auth', async () => {
+      setupDefaultAuth(server)
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/health',
+        options: {
+          auth: false,
+          plugins: { apiv: { version: 'v2' } }
+        },
+        handler: () => ({ status: 'ok' })
+      })
+
+      await server.initialize()
+
+      const res = await server.inject({ method: 'GET', url: '/api/v2/health' })
+      expect(res.statusCode).toBe(200)
+    })
+  })
 })
