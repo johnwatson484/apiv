@@ -140,6 +140,7 @@ All configuration is done at the plugin registration level:
 - **Per-Route Overrides Supported (via aliases)**: Add `options.plugins.apiv` to a route to create an extra alias path with a different `prefix` and/or `version`. The global path still exists.
 - **Global Prefix Remains**: The plugin sets a global prefix for all routes; per-route overrides add aliases and do not replace the global path.
 - **Per-Route Disable (alias)**: Use `options.plugins.apiv: false` or `{ enabled: false }` to add an unprefixed alias for that route. The globally prefixed path remains unless the plugin is disabled globally.
+- **Route Settings Fully Preserved**: Alias routes copy all route configuration from the original route — including `auth`, `validate`, `cors`, `payload`, `pre`, `tags`, and all other options. The alias route id is not copied to avoid conflicts.
 
 ## Route-Level Overrides
 
@@ -227,18 +228,16 @@ server.route({
 
 ## Route Options Preservation
 
-**Important**: Alias routes created by per-route overrides or disabling only copy the route's handler function. **Route configuration options are NOT preserved** on the alias routes.
+Alias routes created by per-route overrides or disabling copy the **complete route configuration** from the original route. Settings such as:
 
-This means that settings like:
-- `auth` - authentication requirements
-- `validate` - request validation schemas
-- `description`, `notes`, `tags` - documentation metadata
-- `cors` - CORS settings
-- `payload` - payload parsing options
-- `timeout` - timeout settings
-- Other route-level configurations
+- `auth` — authentication requirements
+- `validate` — request validation schemas
+- `cors` — CORS settings
+- `payload` — payload parsing options
+- `pre` — prerequisite handlers
+- `timeout`, `description`, `notes`, `tags` — and all other options
 
-...will **only apply to the original prefixed route**, not to any aliases.
+...are applied to both the original prefixed route and any alias routes. The only exception is the route `id`, which is not copied to avoid duplicate ID conflicts.
 
 ### Example
 
@@ -247,7 +246,7 @@ server.route({
   method: 'GET',
   path: '/secure',
   options: {
-    auth: 'jwt',  // Only applies to /api/v1/secure
+    auth: 'jwt',
     validate: {
       query: Joi.object({
         id: Joi.string().required()
@@ -260,33 +259,7 @@ server.route({
 
 // Result:
 // - GET /api/v1/secure - Has auth and validation
-// - GET /secure        - No auth, no validation (just the handler)
-```
-
-**If you need authentication, validation, or other options on multiple paths**, you should explicitly define separate routes instead of relying on aliases:
-
-```javascript
-// Better approach for routes requiring auth/validation
-const routeConfig = {
-  auth: 'jwt',
-  validate: {
-    query: Joi.object({ id: Joi.string().required() })
-  }
-}
-
-server.route({
-  method: 'GET',
-  path: '/api/v1/secure',
-  options: routeConfig,
-  handler: secureHandler
-})
-
-server.route({
-  method: 'GET',
-  path: '/secure',
-  options: routeConfig,
-  handler: secureHandler
-})
+// - GET /secure        - Also has auth and validation
 ```
 
 ## Examples

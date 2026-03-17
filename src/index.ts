@@ -90,6 +90,15 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
         return path
       }
 
+      const buildAliasOptions = (route: RequestRoute<ReqRefDefaults>): Record<string, unknown> => {
+        const { plugins: existingPlugins, id: _id, ...restSettings } = route.settings as any
+        const { apiv: _apiv, ...restPlugins } = existingPlugins || {}
+        return {
+          ...restSettings,
+          ...(Object.keys(restPlugins).length > 0 ? { plugins: restPlugins } : {})
+        }
+      }
+
       for (const route of routes) {
         const routePlugins = (route.settings && (route.settings as any).plugins) || {}
         const apivConfig = routePlugins.apiv
@@ -104,7 +113,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
           server.route({
             method: route.method,
             path: originalPath,
-            handler: route.settings.handler
+            options: buildAliasOptions(route)
           })
           continue
         }
@@ -121,7 +130,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
           server.route({
             method: route.method,
             path: aliasPath,
-            handler: route.settings.handler
+            options: buildAliasOptions(route)
           })
         }
       }

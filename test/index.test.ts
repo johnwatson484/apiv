@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach } from 'vitest'
 import { Server } from '@hapi/hapi'
+import Boom from '@hapi/boom'
+import Joi from 'joi'
 import plugin from '../src/index'
 
 describe('apiv', () => {
@@ -806,6 +808,139 @@ describe('apiv', () => {
       const res = await server.inject({ method: 'GET', url: '/api/v2/handler-test' })
       expect(res.statusCode).toBe(200)
       expect(res.result).toEqual({ versioned: 'data' })
+    })
+
+    it('should preserve auth on unprefixed alias (apiv: false)', async () => {
+      server.auth.scheme('simple-token', () => ({
+        authenticate: (request: any, h: any) => {
+          if (request.headers['x-token'] === 'secret') {
+            return h.authenticated({ credentials: { user: 'test' } })
+          }
+          return h.unauthenticated(Boom.unauthorized('Invalid token'))
+        }
+      }))
+      server.auth.strategy('token', 'simple-token')
+
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/secure',
+        options: {
+          auth: 'token',
+          plugins: { apiv: false }
+        },
+        handler: () => ({ data: 'secret' })
+      })
+
+      await server.initialize()
+
+      const unauth = await server.inject({ method: 'GET', url: '/secure' })
+      expect(unauth.statusCode).toBe(401)
+
+      const authed = await server.inject({ method: 'GET', url: '/secure', headers: { 'x-token': 'secret' } })
+      expect(authed.statusCode).toBe(200)
+    })
+
+    it('should preserve auth on version override alias', async () => {
+      server.auth.scheme('simple-token', () => ({
+        authenticate: (request: any, h: any) => {
+          if (request.headers['x-token'] === 'secret') {
+            return h.authenticated({ credentials: { user: 'test' } })
+          }
+          return h.unauthenticated(Boom.unauthorized('Invalid token'))
+        }
+      }))
+      server.auth.strategy('token', 'simple-token')
+
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/secure',
+        options: {
+          auth: 'token',
+          plugins: { apiv: { version: 'v2' } }
+        },
+        handler: () => ({ data: 'secret' })
+      })
+
+      await server.initialize()
+
+      const unauth = await server.inject({ method: 'GET', url: '/api/v2/secure' })
+      expect(unauth.statusCode).toBe(401)
+
+      const authed = await server.inject({ method: 'GET', url: '/api/v2/secure', headers: { 'x-token': 'secret' } })
+      expect(authed.statusCode).toBe(200)
+    })
+
+    it('should preserve validate settings on unprefixed alias (apiv: false)', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/validated',
+        options: {
+          validate: {
+            query: Joi.object({ id: Joi.number().required() })
+          },
+          plugins: { apiv: false }
+        },
+        handler: () => ({ ok: true })
+      })
+
+      await server.initialize()
+
+      const valid = await server.inject({ method: 'GET', url: '/validated?id=1' })
+      expect(valid.statusCode).toBe(200)
+
+      const invalid = await server.inject({ method: 'GET', url: '/validated' })
+      expect(invalid.statusCode).toBe(400)
+    })
+
+    it('should preserve validate settings on version override alias', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/validated',
+        options: {
+          validate: {
+            query: Joi.object({ id: Joi.number().required() })
+          },
+          plugins: { apiv: { version: 'v2' } }
+        },
+        handler: () => ({ ok: true })
+      })
+
+      await server.initialize()
+
+      const valid = await server.inject({ method: 'GET', url: '/api/v2/validated?id=1' })
+      expect(valid.statusCode).toBe(200)
+
+      const invalid = await server.inject({ method: 'GET', url: '/api/v2/validated' })
+      expect(invalid.statusCode).toBe(400)
+    })
+
+    it('should preserve tags and description on alias routes', async () => {
+      await server.register({ plugin })
+
+      server.route({
+        method: 'GET',
+        path: '/tagged',
+        options: {
+          tags: ['api', 'users'],
+          description: 'Get users',
+          plugins: { apiv: false }
+        },
+        handler: () => ({ ok: true })
+      })
+
+      await server.initialize()
+
+      const alias = server.table().find(r => r.method === 'get' && r.path === '/tagged')
+      expect(alias?.settings.tags).toEqual(['api', 'users'])
+      expect((alias?.settings as any).description).toBe('Get users')
     })
   })
 })
