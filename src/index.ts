@@ -47,6 +47,7 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
     const normalizedPrefix: string = parts.length ? '/' + parts.join('/') : ''
 
     let realm = server.realm as any
+
     while (realm.parent) {
       realm = realm.parent
     }
@@ -55,102 +56,106 @@ const plugin: Plugin<ApiVersionPluginOptions> = {
     const globalPrefix: string = normalizedPrefix || existing
     realm.modifiers.route.prefix = globalPrefix
 
-    server.ext('onPreStart', () => {
-      const routes: RequestRoute<ReqRefDefaults>[] = server.table()
+    const buildVersionedPath = (originalPath: string, prefix?: string, version?: string): string => {
+      const segments: string[] = []
 
-      const buildVersionedPath = (originalPath: string, prefix?: string, version?: string): string => {
-        const segments: string[] = []
-
-        if (prefix) {
-          segments.push(prefix)
-        }
-
-        if (version) {
-          segments.push(version)
-        }
-
-        const cleanPath: string = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
-
-        if (cleanPath) {
-          segments.push(cleanPath)
-        }
-
-        return '/' + segments.join('/').replaceAll(/\/+/g, '/')
+      if (prefix) {
+        segments.push(prefix)
       }
 
-      const stripGlobal = (path: string): string => {
-        if (!globalPrefix) {
-          return path
-        }
+      if (version) {
+        segments.push(version)
+      }
 
-        if (path.startsWith(globalPrefix)) {
-          const trimmed: string = path.slice(globalPrefix.length)
-          return trimmed.length ? trimmed : '/'
-        }
+      const cleanPath: string = originalPath.startsWith('/') ? originalPath.slice(1) : originalPath
+
+      if (cleanPath) {
+        segments.push(cleanPath)
+      }
+
+      return '/' + segments.join('/').replaceAll(/\/+/g, '/')
+    }
+
+    const stripGlobal = (path: string): string => {
+      if (!globalPrefix) {
         return path
       }
 
-      const buildAliasOptions = (route: RequestRoute<ReqRefDefaults>): Record<string, unknown> => {
-        const { plugins: existingPlugins, id: _id, ...restSettings } = route.settings as any
-        const { apiv: _apiv, ...restPlugins } = existingPlugins || {}
+      if (path.startsWith(globalPrefix)) {
+        const trimmed: string = path.slice(globalPrefix.length)
+        return trimmed.length ? trimmed : '/'
+      }
+      return path
+    }
 
-        // Hapi mutates certain nested config objects during normalisation, adding computed
-        // fields prefixed with _ (e.g. security._hsts, security._xframe). These are internal
-        // cache strings derived from the public options and are rejected by Hapi's route
-        // validator if passed back as route options. Strip them so Hapi re-derives them cleanly.
-        const sanitised: Record<string, unknown> = {}
-        for (const [key, value] of Object.entries(restSettings)) {
-          if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-            sanitised[key] = Object.fromEntries(
-              Object.entries(value as object).filter(([k]) => !k.startsWith('_'))
-            )
-          } else {
-            sanitised[key] = value
-          }
-        }
+    const buildAliasOptions = (route: RequestRoute<ReqRefDefaults>): Record<string, unknown> => {
+      const { plugins: existingPlugins, id: _id, ...restSettings } = route.settings as any
+      const { apiv: _apiv, ...restPlugins } = existingPlugins || {}
 
-        return {
-          ...sanitised,
-          ...(Object.keys(restPlugins).length > 0 ? { plugins: restPlugins } : {})
+      // Hapi mutates certain nested config objects during normalisation, adding computed
+      // fields prefixed with _ (e.g. security._hsts, security._xframe). These are internal
+      // cache strings derived from the public options and are rejected by Hapi's route
+      // validator if passed back as route options. Strip them so Hapi re-derives them cleanly.
+      const sanitised: Record<string, unknown> = {}
+      for (const [key, value] of Object.entries(restSettings)) {
+        if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
+          sanitised[key] = Object.fromEntries(
+            Object.entries(value).filter(([k]) => !k.startsWith('_'))
+          )
+        } else {
+          sanitised[key] = value
         }
       }
 
-      for (const route of routes) {
-        const routePlugins = (route.settings && (route.settings as any).plugins) || {}
-        const apivConfig = routePlugins.apiv
+      return {
+        ...sanitised,
+        ...(Object.keys(restPlugins).length > 0 ? { plugins: restPlugins } : {})
+      }
+    }
 
-        if (apivConfig === undefined) {
-          continue
-        }
+    const processRoute = (route: RequestRoute<ReqRefDefaults>): void => {
+      const routePlugins = (route.settings && (route.settings as any).plugins) || {}
+      const apivConfig = routePlugins.apiv
 
-        const originalPath: string = stripGlobal(route.path)
+      if (apivConfig === undefined) {
+        return
+      }
 
-        if (apivConfig === false || apivConfig?.enabled === false) {
-          if (originalPath !== route.path) {
-            server.route({
-              method: route.method,
-              path: originalPath,
-              options: buildAliasOptions(route)
-            })
-          }
-          continue
-        }
+      const originalPath: string = stripGlobal(route.path)
 
-        const hasPrefix: boolean = apivConfig && Object.hasOwn(apivConfig, 'prefix')
-        const hasVersion: boolean = apivConfig && Object.hasOwn(apivConfig, 'version')
-
-        const overridePrefix: string = hasPrefix ? apivConfig.prefix : mergedOptions.prefix
-        const overrideVersion: string = hasVersion ? apivConfig.version : mergedOptions.version
-
-        const aliasPath: string = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
-
-        if (aliasPath !== route.path) {
+      if (apivConfig === false || apivConfig?.enabled === false) {
+        if (originalPath !== route.path) {
           server.route({
             method: route.method,
-            path: aliasPath,
+            path: originalPath,
             options: buildAliasOptions(route)
           })
         }
+        return
+      }
+
+      const hasPrefix: boolean = apivConfig && Object.hasOwn(apivConfig, 'prefix')
+      const hasVersion: boolean = apivConfig && Object.hasOwn(apivConfig, 'version')
+
+      const overridePrefix: string = hasPrefix ? apivConfig.prefix : mergedOptions.prefix
+      const overrideVersion: string = hasVersion ? apivConfig.version : mergedOptions.version
+
+      const aliasPath: string = buildVersionedPath(originalPath, overridePrefix, overrideVersion)
+
+      if (aliasPath !== route.path) {
+        server.route({
+          method: route.method,
+          path: aliasPath,
+          options: buildAliasOptions(route)
+        })
+      }
+    }
+
+    server.ext('onPreStart', () => {
+      const routes: RequestRoute<ReqRefDefaults>[] = server.table()
+
+      for (const route of routes) {
+        processRoute(route)
       }
     })
   }
